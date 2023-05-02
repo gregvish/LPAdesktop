@@ -2,7 +2,8 @@
 
 # LPAdesktop
 
-LPA Simulator is an application for managing eSIM profiles on removable eUICCs. 
+This is a fork of LPA Simulator, which is an application for managing eSIM profiles on
+eUICCs. This fork communicates to modems via a TCP APDU proxy
 
 The current version supports the following features:
 -	List installed profiles
@@ -14,19 +15,18 @@ The current version supports the following features:
 - Retrieve Root SM-DS and Default SM-DP+ addresses
 - Set SM-DP+ address
 
-Using this tool you can deliver eSIM profile on the removable eUICC (plastic eSIM)
+Using this tool you can deliver eSIM profile on the eUICC
 
 # How to build
-1. `git clone https://github.com/Truphone/LPAdesktop.git`
-2. `docker-compose up`
-3. Binaries will be in the `/target` folder
+1. `git clone --recurse-submodules https://github.com/gregvish/LPAdesktop`
+2. `./build.sh`
+3. JAR will be created in workdir
 
 # How to use
-1. Connect SmartCard reader 
-2. Insert eUICC into the card reader
-3. Open LPAdesktop
-4. Insert RSP URL or scan QR via camera
-5. eSIM profile will be delivired to connected eUICC
+1. Run an APDU proxy to a modem (apdu.py from https://github.com/gregvish/gsm-sip-gw)
+2. Open LPAdesktop
+3. Insert RSP URL or scan QR via camera
+4. eSIM profile will be delivired to connected eUICC
 
 ## ARM (M1) known issue
 Plugin launch4j-maven-plugin is nor support ARM, to disable it comment section in pom.xml. 
