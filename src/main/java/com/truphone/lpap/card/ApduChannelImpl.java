@@ -12,12 +12,12 @@ import static com.truphone.lpap.HexHelper.hexStringToByteArray;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import javax.smartcardio.Card;
-import javax.smartcardio.CardChannel;
+
+import java.lang.*;
+import java.net.*;
+import java.io.*;
+import java.nio.ByteBuffer;
 import javax.smartcardio.CardException;
-import javax.smartcardio.CardTerminal;
-import javax.smartcardio.CommandAPDU;
-import javax.smartcardio.ResponseAPDU;
 
 /**
  *
@@ -27,72 +27,106 @@ public class ApduChannelImpl implements ApduChannel {
 
     private static final java.util.logging.Logger LOG = Logger.getLogger(ApduChannelImpl.class.getName());;
 
-    private final CardChannel basicChannel;
-    
-    private final CardChannel logicalChannel;
-    
+
     private ApduTransmittedListener apduTransmittedListener;
+    private Socket socket;
+    private OutputStream output;
+    private InputStream input;
+
+    private byte[] xmit(byte[] apdu) {
+        byte[] len = ByteBuffer.allocate(2).putShort((short)apdu.length).array();
+        byte[] rx_len = ByteBuffer.allocate(2).putShort((short)0).array();
+        byte[] rx = null;
+        int rx_len_int = 0;
+
+        try {
+            output.write(len, 0, 2);
+            output.write(apdu, 0, apdu.length);
+
+            if (2 != input.read(rx_len, 0, 2)) {
+                System.out.println("EOF");
+                return null;
+            }
+
+            rx_len_int = (((short)(rx_len[0] & 0xff)) << 8) + (rx_len[1] & 0xff);
+
+            rx = ByteBuffer.allocate(rx_len_int).array();
+            if (rx_len_int != input.read(rx, 0, rx_len_int)) {
+                System.out.println("EOF");
+                return null;
+            }
+
+        } catch (IOException ex) {
+            System.out.println("I/O error: " + ex.getMessage());
+        }
+
+        return rx;
+    }
 
     public ApduChannelImpl(final String cardReader) throws CardException {
-        final CardTerminal cardTerminal = CardTerminalHandler.getCardTerminalByName(cardReader);
-        final Card card = cardTerminal.connect("T=0");
-        basicChannel = card.getBasicChannel();
-        
-        ResponseAPDU responseApdu;
+        try {
+            socket = new Socket("localhost", Integer.parseInt(System.getenv("APDU_PORT")));
+            output = socket.getOutputStream();
+            input = socket.getInputStream();
+
+        } catch (UnknownHostException ex) {
+            System.out.println("Server not found: " + ex.getMessage());
+            System.exit(1);
+            return;
+
+        } catch (IOException ex) {
+            System.out.println("I/O error: " + ex.getMessage());
+            System.exit(1);
+            return;
+
+        } catch (NumberFormatException ex) {
+            System.out.println("Provide port in APDU_PORT env");
+            System.exit(1);
+            return;
+        }
+
         byte[] apdu;
+        byte[] responseApdu;
 
         //AP ADDDED THIS STATUS COMMAND
         //send terminal capabilities
         LOG.log(Level.INFO,("Send Terminal Capabilities"));
         apdu = hexStringToByteArray("80AA00000AA9088100820101830107");
-        
+
         LOG.log(Level.INFO, byteArrayToHex(apdu));
-        responseApdu = basicChannel.transmit(new CommandAPDU(apdu));
-        LOG.log(Level.INFO,(String.format("0x%04X", responseApdu.getSW())));
+        responseApdu = xmit(apdu);
 
         LOG.log(Level.INFO,("Open Logical Channel and Select ISD-R"));
-        logicalChannel = card.openLogicalChannel();
 
         apdu = hexStringToByteArray("00A4040010A0000005591010FFFFFFFF8900000100");
-        
+
         LOG.log(Level.INFO, byteArrayToHex(apdu));
-        responseApdu = logicalChannel.transmit(new CommandAPDU(apdu));
-        LOG.log(Level.INFO,(String.format("0x%04X", responseApdu.getSW())));
+        responseApdu = xmit(apdu);
         //transmitAPDU("00A4040010A0000005591010FFFFFFFF8900000100");
 
-      
+
         //Send Status
         LOG.log(Level.INFO,("Send Status"));
         apdu = hexStringToByteArray("80F2000C00");
         LOG.log(Level.INFO, byteArrayToHex(apdu));
-        responseApdu = logicalChannel.transmit(new CommandAPDU(apdu));
-        LOG.log(Level.INFO,(String.format("0x%04X", responseApdu.getSW())));
+        responseApdu = xmit(apdu);
 
     }
 
     @Override
     public String transmitAPDU(String apdu) {
-        //apdu = "80" + apdu.substring(2);
-        apdu = "8" + logicalChannel.getChannelNumber() + apdu.substring(2);
-
-        ResponseAPDU responseApdu;
         byte[] bApdu;
+        byte[] responseApdu;
 
         //send terminal capabilities
         bApdu = hexStringToByteArray(apdu.trim().replaceAll(" ", ""));
-        try {
-            responseApdu = logicalChannel.transmit(new CommandAPDU(bApdu));
+        responseApdu = xmit(bApdu);
 
-            if (apduTransmittedListener != null) {
-                apduTransmittedListener.onApduTransmitted();
-            }
-
-        } catch (CardException ex) {
-            LOG.log(Level.INFO,(ex.toString()));
-            return "";
+        if (apduTransmittedListener != null) {
+            apduTransmittedListener.onApduTransmitted();
         }
 
-        return byteArrayToHex(responseApdu.getData()) + String.format("%04X", responseApdu.getSW());
+        return byteArrayToHex(responseApdu);
     }
 
     @Override
@@ -129,8 +163,10 @@ public class ApduChannelImpl implements ApduChannel {
     }
 
     public void close() throws CardException {
-        //logicalChannel.close();
-        basicChannel.getCard().disconnect(true);
-        
+        try {
+            socket.close();
+        } catch (IOException ex) {
+
+        }
     }
 }

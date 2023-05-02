@@ -36,13 +36,7 @@ public class CardTerminalHandler {
     
     private static void refreshList() throws CardException {
         cardTerminalNames.clear();
-        
-        final TerminalFactory terminalFactory = TerminalFactory.getDefault();
-        cardTerminals = terminalFactory.terminals();
-        
-        for (CardTerminal terminal : cardTerminals.list()) {
-            cardTerminalNames.add(terminal.getName());
-        }
+        cardTerminalNames.add("Virtual");
     }
     
     public static CardTerminal getCardTerminalByName(final String name) throws CardException {
